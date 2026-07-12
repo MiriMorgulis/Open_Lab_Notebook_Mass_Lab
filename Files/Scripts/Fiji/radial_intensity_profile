@@ -1,0 +1,66 @@
+// Fiji macro: radial profiles with automatic per-channel background subtraction
+// and normalization.
+// Open all channel TIFFs first.
+// Add radial line ROIs to ROI Manager.
+// Add one background ROI LAST and rename it "Background".
+
+outDir = getDirectory("Choose output folder");
+outFile = outDir + "radial_profiles_normalized_bgsub.csv";
+
+nRois = roiManager("count");
+if (nRois < 2) exit("Need radial ROIs + one Background ROI.");
+
+titles = getList("image.titles");
+if (titles.length == 0) exit("No images open.");
+
+bgIndex = nRois - 1;
+
+File.saveString(
+"Image,ROI,Distance_pixel,Distance_normalized,Raw_intensity,Background_mean,BG_subtracted_intensity,Normalized_intensity\n",
+outFile
+);
+
+for (img = 0; img < titles.length; img++) {
+    selectWindow(titles[img]);
+    imageName = getTitle();
+
+    // measure background for this channel
+    roiManager("select", bgIndex);
+    getStatistics(area, meanBg);
+
+    // loop through radial ROIs only, excluding background ROI
+    for (r = 0; r < bgIndex; r++) {
+        roiManager("select", r);
+        profile = getProfile();
+
+        maxVal = -999999;
+
+        // find max after background subtraction
+        for (i = 0; i < profile.length; i++) {
+            corrected = profile[i] - meanBg;
+            if (corrected < 0) corrected = 0;
+            if (corrected > maxVal) maxVal = corrected;
+        }
+
+        if (maxVal == 0) maxVal = 1;
+
+        // export profile
+        for (i = 0; i < profile.length; i++) {
+            raw = profile[i];
+            corrected = raw - meanBg;
+            if (corrected < 0) corrected = 0;
+
+            if (profile.length > 1)
+                distNorm = i / (profile.length - 1);
+            else
+                distNorm = 0;
+
+            normIntensity = corrected / maxVal;
+
+            line = imageName + "," + (r+1) + "," + i + "," + distNorm + "," + raw + "," + meanBg + "," + corrected + "," + normIntensity + "\n";
+            File.append(line, outFile);
+        }
+    }
+}
+
+print("Done. Saved to: " + outFile);
